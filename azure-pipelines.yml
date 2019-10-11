@@ -30,6 +30,7 @@ pr:
   branches:
     include:
     - master
+    - develop
 
 jobs:
 - job: Build
@@ -48,19 +49,26 @@ jobs:
   pool:
     vmImage: $(vmImage)
 
+  variables:
+    npm_config_cache: $(Pipeline.Workspace)/.npm
+
   steps:
   - checkout: self
     lfs: true
 
   - task: NodeTool@0
-    displayName: Use Node 8.x
+    displayName: Use Node 10.x
     inputs:
-      versionSpec: 8.x
+      versionSpec: 10.x
 
-  - task: Npm@1
-    displayName: Install dependencies
+  - task: CacheBeta@0
+    displayName: Cache packages
     inputs:
-      verbose: false
+      key: npm | $(Agent.OS) | package-lock.json
+      path: $(npm_config_cache)
+
+  - script: npm ci
+    displayName: Install dependencies
 
   - task: Gulp@0
     displayName: Compile
@@ -116,11 +124,9 @@ jobs:
     displayName: Package
     condition: and(succeeded(), eq(variables['platform'], 'windows'))
 
-  - task: PublishPipelineArtifact@0
+  - publish: $(Build.ArtifactStagingDirectory)
+    artifact: drop
     displayName: Publish drop
-    inputs:
-      artifactName: drop
-      targetPath: $(Build.ArtifactStagingDirectory)
     condition: and(succeeded(), eq(variables['platform'], 'windows'))
 
   # Need to persist Build.BuildNumber since subsequent jobs are unaffected (agent-scoped).
@@ -136,7 +142,7 @@ jobs:
   condition: >-
     and(
       succeeded(),
-      eq(variables['Build.SourceBranch'], 'refs/heads/master'),
+      in(variables['Build.SourceBranch'], 'refs/heads/master', 'refs/heads/develop'),
       in(variables['Build.Reason'], 'Manual', 'IndividualCI', 'BatchedCI')
     )
 
@@ -162,11 +168,10 @@ jobs:
     inputs:
       versionSpec: 8.x
 
-  - task: DownloadPipelineArtifact@1
+  - download: current
+    artifact: drop
+    patterns: '**/*.vsix'
     displayName: Download drop
-    inputs:
-      artifactName: drop
-      downloadPath: $(System.ArtifactsDirectory)
 
   - task: GitHubRelease@0
     displayName: Create release
@@ -176,7 +181,7 @@ jobs:
       tagSource: manual
       tag: v$(BuildNumber)
       assets: |
-        $(Build.ArtifactStagingDirectory)/**/*.vsix
+        $(Pipeline.Workspace)/drop/**/*.vsix
       isPreRelease: $(Prerelease)
     condition: and(succeeded(), eq(variables['Publish'], 'true'))
 
@@ -188,7 +193,7 @@ jobs:
 
   - script: |
       shopt -s globstar nocaseglob nocasematch nullglob
-      for fname in $(System.ArtifactsDirectory)/**/*.vsix; do
+      for fname in $(Pipeline.Workspace)/drop/**/*.vsix; do
         if [ -f "$fname" ]; then
           if [[ "$PUBLISH" == "true" ]]; then
             echo Publishing: $fname
