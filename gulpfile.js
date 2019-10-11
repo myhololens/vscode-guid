@@ -57,7 +57,14 @@ gulp.task('set-version', () => {
         }
     });
 
-    return nbgv.setPackageVersion();
+    const fs = require('fs');
+    const renameAsync = require('util').promisify(fs.rename);
+
+    return renameAsync('package-lock.json', 'package-lock.backup').then(() => {
+        return nbgv.setPackageVersion().finally(() => {
+            return renameAsync('package-lock.backup', 'package-lock.json');
+        });
+    });
 });
 
 gulp.task('clean', () => {
