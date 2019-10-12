@@ -25,6 +25,7 @@ trigger:
   branches:
     include:
     - master
+    - develop
 
 pr:
   branches:
@@ -117,25 +118,25 @@ jobs:
   - script: |
       npm install -g vsce
     displayName: Install vsce
-    condition: and(succeeded(), eq(variables['platform'], 'windows'))
+    condition: and(succeeded(), eq(variables['platform'], 'linux'))
 
   - script: |
       vsce package -o "$(Build.ArtifactStagingDirectory)/vscode-guid-$(Build.BuildNumber).vsix"
     displayName: Package
-    condition: and(succeeded(), eq(variables['platform'], 'windows'))
+    condition: and(succeeded(), eq(variables['platform'], 'linux'))
 
   - publish: $(Build.ArtifactStagingDirectory)
     artifact: drop
     displayName: Publish drop
-    condition: and(succeeded(), eq(variables['platform'], 'windows'))
+    condition: and(succeeded(), eq(variables['platform'], 'linux'))
 
   # Need to persist Build.BuildNumber since subsequent jobs are unaffected (agent-scoped).
   - script: |
-      echo Persisting BuildNumber: %BUILD_BUILDNUMBER%
-      echo ##vso[task.setvariable variable=BuildNumber;isOutput=true]%BUILD_BUILDNUMBER%
+      echo "Persisting BuildNumber: $BUILD_BUILDNUMBER"
+      echo "##vso[task.setvariable variable=BuildNumber;isOutput=true]$BUILD_BUILDNUMBER"
     displayName: Persist variables
     name: vars
-    condition: and(succeeded(), eq(variables['platform'], 'windows'))
+    condition: and(succeeded(), eq(variables['platform'], 'linux'))
 
 - job: Deploy
   dependsOn: Build
@@ -151,7 +152,7 @@ jobs:
     vmImage: ubuntu-16.04
 
   variables:
-    BuildNumber: $[dependencies.Build.outputs['windows.vars.BuildNumber']]
+    BuildNumber: $[dependencies.Build.outputs['linux.vars.BuildNumber']]
     Prerelease: $[ne(variables['Build.SourceBranch'], 'refs/heads/master')]
 
   steps:
